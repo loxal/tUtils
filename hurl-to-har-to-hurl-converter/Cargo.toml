@@ -1,0 +1,13 @@
+[package]
+name = "hurl-to-har-to-hurl-converter"
+version = "0.1.0"
+edition = "2024"
+description = "Convert between HURL and HAR file formats"
+license = "MIT"
+publish = false
+
+[dependencies]
+clap = { version = "4.5.53", features = ["derive"] }
+har = "0.8.1"
+hurl_core = "7.1.0"
+serde_json = "1.0.149"

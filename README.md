@@ -1,4 +1,4 @@
-# Snippets
+# tUtils - Terminal Utilities
 
 A collection of standalone scripts and utilities.
 
@@ -16,6 +16,15 @@ Batch audio-to-Markdown transcription tool using OpenAI Whisper large-v3. Recurs
 - Optional speaker diarization via pyannote.audio (requires a HuggingFace token)
 - Skips already-transcribed files on re-runs
 - Progress bar via tqdm
+
+### `hurl-to-har-to-hurl-converter/`
+
+Bidirectional converter between [HURL](https://hurl.dev) and [HAR](http://www.softwareishard.com/blog/har-12-spec/) file formats. Auto-detects conversion direction from the input file extension. Built with Rust using `hurl_core`.
+
+- HURL to HAR: parses HURL files and outputs HAR v1.2 JSON
+- HAR to HURL: supports HAR v1.2/v1.3, filters browser-internal headers, maps cookies and body
+
+See [`hurl-to-har-to-hurl-converter/README.md`](hurl-to-har-to-hurl-converter/README.md) for build and usage instructions.
 
 ## Setup
 

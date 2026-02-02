@@ -34,6 +34,7 @@ import os
 import sys
 import shutil
 import warnings
+import argparse
 from pathlib import Path
 from datetime import timedelta
 from xml.sax.saxutils import escape
@@ -356,6 +357,16 @@ def process_folder(
     print(f"{'='*50}")
 
 def main():
+    parser = argparse.ArgumentParser(description="Audio-to-SSML Transcription")
+    parser.add_argument("folder", nargs="?", help="Folder containing audio files")
+    parser.add_argument("--audio-folder", help="Folder containing audio files")
+    parser.add_argument("--lang", help="Language code (e.g., 'en', 'de')")
+    parser.add_argument("--hugging-face-api-key", help="HuggingFace API Key for diarization")
+    args = parser.parse_args()
+
+    if args.hugging_face_api_key:
+        os.environ["HF_TOKEN"] = args.hugging_face_api_key
+
     print("="*60)
     print("   AUDIO TO SSML TRANSCRIPTION")
     print("   Using OpenAI Whisper large-v3")
@@ -373,26 +384,45 @@ def main():
     # Try to set up diarization
     diarization = setup_diarization()
 
-    # Interactive folder selection
-    print("\n" + "-"*60)
-    while True:
-        folder_path = input("\nEnter full path to audio folder: ").strip()
-
-        # Handle quotes and expand ~
-        folder_path = folder_path.strip("'\"")
-        folder = Path(folder_path).expanduser().resolve()
-
-        if folder.is_dir():
-            break
+    # Folder selection
+    folder = None
+    folder_input = args.audio_folder or args.folder
+    if folder_input:
+        folder_arg = Path(folder_input).expanduser().resolve()
+        if folder_arg.is_dir():
+            folder = folder_arg
+            print(f"\nProcessing folder: {folder}")
         else:
-            print(f"✗ Not a valid directory: {folder}")
-            print("  Please enter a valid folder path.")
+            print(f"\n✗ Error: Not a valid directory: {folder_arg}")
+            sys.exit(1)
+
+    if not folder:
+        print("\n" + "-"*60)
+        while True:
+            folder_path = input("\nEnter full path to audio folder: ").strip()
+
+            # Handle quotes and expand ~
+            folder_path = folder_path.strip("'\"")
+            folder = Path(folder_path).expanduser().resolve()
+
+            if folder.is_dir():
+                break
+            else:
+                print(f"✗ Not a valid directory: {folder}")
+                print("  Please enter a valid folder path.")
 
     # Optional language hint
-    print("\nLanguage options:")
-    print("  - Press Enter for auto-detection")
-    print("  - Or enter language code (e.g., 'en', 'de', 'es', 'fr')")
-    language = input("Language [auto]: ").strip() or None
+    language = args.lang
+    if language:
+        print(f"\nLanguage set to: {language}")
+    elif args.audio_folder or args.folder:
+        # Non-interactive mode if folder provided via CLI
+        print("\nLanguage: Auto-detect")
+    else:
+        print("\nLanguage options:")
+        print("  - Press Enter for auto-detection")
+        print("  - Or enter language code (e.g., 'en', 'de', 'es', 'fr')")
+        language = input("Language [auto]: ").strip() or None
 
     # Process the folder
     process_folder(folder, model, diarization, language)

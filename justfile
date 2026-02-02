@@ -15,8 +15,8 @@ generate-image:
 generate-speech lang='de':
     uv run generate_speech.py --lang {{lang}}
 
-transcribe:
-    uv run transcribe_audio_folder_to_markdown.py
+transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/Drive/archive/Maxim/03-Beweismaterial/Audio":
+    uv run transcribe_audio_folder_to_markdown.py {{args}}
 
 merge-videos:
     #!/usr/bin/env bash

@@ -37,6 +37,7 @@ LANG_VOICES = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lang", default="de", choices=LANG_VOICES.keys())
+parser.add_argument("--author", help="Author/Artist name for metadata")
 args = parser.parse_args()
 
 lang_cfg = LANG_VOICES[args.lang]
@@ -158,6 +159,9 @@ subprocess.run(
 # Convert WAV to MP3 with embedded metadata
 local_mp3 = local_wav.with_suffix(".mp3")
 ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(local_wav), "-codec:a", "libmp3lame", "-q:a", "0", "-ar", "48000"]
+
+if args.author:
+    dc_metadata["creator"] = args.author
 
 # Map Dublin Core metadata to ID3 tags
 dc_to_id3 = {

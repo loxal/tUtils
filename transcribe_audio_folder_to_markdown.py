@@ -159,6 +159,16 @@ def format_timestamp(seconds: float) -> str:
     minutes, secs = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
+def build_speaker_labels(speaker_segments: dict) -> dict:
+    """Map raw speaker IDs to friendly labels (Speaker A, Speaker B, ...)."""
+    raw_ids = sorted(set(speaker_segments.values()))
+    labels = {}
+    for i, raw_id in enumerate(raw_ids):
+        letter = chr(ord("A") + i) if i < 26 else str(i + 1)
+        labels[raw_id] = f"Speaker {letter}"
+    return labels
+
+
 def transcribe_audio(
     audio_path: str,
     model,
@@ -172,6 +182,7 @@ def transcribe_audio(
     """
     # Get speaker segments if diarization is available
     speaker_segments = get_speaker_segments(audio_path, diarization_pipeline)
+    speaker_labels = build_speaker_labels(speaker_segments) if speaker_segments else {}
 
     # Transcribe with Whisper
     options = {"verbose": False}
@@ -184,6 +195,13 @@ def transcribe_audio(
     md_lines = []
     md_lines.append(f"# Transcript: {Path(audio_path).name}\n")
     md_lines.append(f"**Language detected:** {result.get('language', 'unknown')}\n")
+
+    if speaker_labels:
+        md_lines.append(f"**Speakers identified:** {len(speaker_labels)}\n")
+        for raw_id, label in speaker_labels.items():
+            md_lines.append(f"- **{label}** ({raw_id})")
+        md_lines.append("")
+
     md_lines.append("---\n")
 
     current_speaker = None
@@ -199,7 +217,8 @@ def transcribe_audio(
         timestamp = format_timestamp(start)
 
         # Get speaker if diarization is available
-        speaker = find_speaker_for_segment(start, end, speaker_segments)
+        raw_speaker = find_speaker_for_segment(start, end, speaker_segments)
+        speaker = speaker_labels.get(raw_speaker) if raw_speaker else None
 
         if speaker and speaker != current_speaker:
             current_speaker = speaker

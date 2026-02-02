@@ -6,6 +6,15 @@ bootstrap-python-env:
 generate-video:
     uv run generate_video.py
 
+generate-audio:
+    uv run generate_audio.py
+
+generate-image:
+    uv run generate_image.py
+
+generate-speech:
+    uv run generate_speech.py
+
 merge-videos:
     #!/usr/bin/env bash
     set -euo pipefail

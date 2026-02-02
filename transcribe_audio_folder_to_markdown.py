@@ -185,52 +185,15 @@ def build_speaker_labels(speaker_segments: dict) -> dict:
 
 
 def voices_for_language(lang_code: str) -> list[str]:
-    """Return up to 6 distinct Chirp 3 HD voices for a language."""
-    pools = {
-        "de": [
-            "de-DE-Chirp3-HD-Fenrir",
-            "de-DE-Chirp3-HD-Aoede",
-            "de-DE-Chirp3-HD-Orus",
-            "de-DE-Chirp3-HD-Puck",
-            "de-DE-Chirp3-HD-Charon",
-            "de-DE-Chirp3-HD-Kore",
-        ],
-        "en": [
-            "en-US-Chirp3-HD-Achird",
-            "en-US-Chirp3-HD-Aoede",
-            "en-US-Chirp3-HD-Fenrir",
-            "en-US-Chirp3-HD-Puck",
-            "en-US-Chirp3-HD-Charon",
-            "en-US-Chirp3-HD-Kore",
-        ],
-        "es": [
-            "es-ES-Chirp3-HD-Achird",
-            "es-ES-Chirp3-HD-Aoede",
-            "es-ES-Chirp3-HD-Fenrir",
-            "es-ES-Chirp3-HD-Puck",
-            "es-ES-Chirp3-HD-Charon",
-            "es-ES-Chirp3-HD-Kore",
-        ],
-        "fr": [
-            "fr-FR-Chirp3-HD-Achird",
-            "fr-FR-Chirp3-HD-Aoede",
-            "fr-FR-Chirp3-HD-Fenrir",
-            "fr-FR-Chirp3-HD-Puck",
-            "fr-FR-Chirp3-HD-Charon",
-            "fr-FR-Chirp3-HD-Kore",
-        ],
-        "ru": [
-            "ru-RU-Chirp3-HD-Achird",
-            "ru-RU-Chirp3-HD-Aoede",
-            "ru-RU-Chirp3-HD-Fenrir",
-            "ru-RU-Chirp3-HD-Puck",
-            "ru-RU-Chirp3-HD-Charon",
-            "ru-RU-Chirp3-HD-Kore",
-        ],
+    """Return 6 distinct Chirp 3 HD GA voices for a language."""
+    # GA voices available across all 31 Chirp 3 HD locales
+    voice_names = ["Fenrir", "Aoede", "Orus", "Puck", "Charon", "Kore"]
+    locale_map = {
+        "de": "de-DE", "en": "en-US", "es": "es-ES",
+        "fr": "fr-FR", "ru": "ru-RU",
     }
-    fallback = [f"{lang_code}-Chirp3-HD-{name}" for name in
-                ["Achird", "Aoede", "Fenrir", "Puck", "Charon", "Kore"]]
-    return pools.get(lang_code, fallback)
+    locale = locale_map.get(lang_code, f"{lang_code}-{lang_code.upper()}")
+    return [f"{locale}-Chirp3-HD-{name}" for name in voice_names]
 
 
 def transcribe_audio(

@@ -6,6 +6,7 @@
 # ]
 # ///
 
+import argparse
 import hashlib
 import re
 import subprocess
@@ -27,6 +28,20 @@ GCS_BUCKET = "video-1312312uuio323"
 PROMPTS_DIR = Path.home() / "my/src/loxal/lox/al/prompts"
 SSML_FILE = PROMPTS_DIR / "speech.ssml"
 MD_FILE = PROMPTS_DIR / "speech.md"
+
+LANG_VOICES = {
+    "de": {"voice": "de-DE-Chirp3-HD-Fenrir", "language_code": "de-DE"},
+    "en": {"voice": "en-US-Chirp3-HD-Fenrir", "language_code": "en-US"},
+    "ru": {"voice": "ru-RU-Chirp3-HD-Charon", "language_code": "ru-RU"},
+}
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--lang", default="de", choices=LANG_VOICES.keys())
+args = parser.parse_args()
+
+lang_cfg = LANG_VOICES[args.lang]
+VOICE_NAME = lang_cfg["voice"]
+LANGUAGE_CODE = lang_cfg["language_code"]
 
 
 def markdown_to_plain_text(md: str) -> str:
@@ -96,8 +111,6 @@ else:
 theme = hashlib.sha256(input_hash.encode()).hexdigest()[:8]
 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-VOICE_NAME = "de-DE-Chirp3-HD-Fenrir"
-
 gcs_filename = f"{file_prefix}_{VOICE_NAME}_{theme}-{timestamp}.wav"
 output_gcs_uri = f"gs://{GCS_BUCKET}/speech/{gcs_filename}"
 
@@ -105,7 +118,7 @@ client = texttospeech.TextToSpeechLongAudioSynthesizeClient()
 
 voice = texttospeech.VoiceSelectionParams(
     name=VOICE_NAME,
-    language_code="de-DE",
+    language_code=LANGUAGE_CODE,
 )
 
 audio_config = texttospeech.AudioConfig(

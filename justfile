@@ -12,8 +12,8 @@ generate-audio:
 generate-image:
     uv run generate_image.py
 
-generate-speech:
-    uv run generate_speech.py
+generate-speech lang='de':
+    uv run generate_speech.py --lang {{lang}}
 
 transcribe:
     uv run transcribe_audio_folder_to_markdown.py

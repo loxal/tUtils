@@ -1,34 +1,40 @@
 # tUtils - Terminal Utilities
 
-A collection of standalone scripts and utilities.
+A collection of standalone scripts and utilities. All Python scripts use PEP 723 inline metadata — `uv run` installs dependencies automatically.
 
 ## Contents
 
 ### `transcribe_audio_folder_to_markdown.py`
 
-Batch audio-to-Markdown transcription tool using OpenAI Whisper large-v3. Recursively processes all audio files in a folder and creates `.md` files alongside each source file with timestamped transcripts.
+Batch audio-to-SSML transcription using OpenAI Whisper large-v3. Recursively processes audio files in a folder and creates `.ssml` files alongside each source, compatible with `generate_speech.py` for re-synthesis.
 
-**Features:**
-
-- Supports 12+ audio formats (m4a, mp3, wav, flac, ogg, opus, and more)
+- Supports 12+ audio formats (m4a, mp3, wav, flac, ogg, opus, etc.)
 - Auto-downloads the Whisper large-v3 model (~3GB) to `~/Downloads/whisper_models/`
-- Automatic language detection
-- Optional speaker diarization via pyannote.audio (requires a HuggingFace token)
+- Speaker diarization via pyannote.audio — assigns distinct Chirp 3 HD voices per speaker (up to 6)
+- Dublin Core metadata (`<dc:title>`) embedded in SSML output
 - Skips already-transcribed files on re-runs
-- Progress bar via tqdm
 
-### `hurl-to-har-to-hurl-converter/`
-
-Bidirectional converter between [HURL](https://hurl.dev) and [HAR](http://www.softwareishard.com/blog/har-12-spec/) file formats. Auto-detects conversion direction from the input file extension. Built with Rust using `hurl_core`.
-
-- HURL to HAR: parses HURL files and outputs HAR v1.2 JSON
-- HAR to HURL: supports HAR v1.2/v1.3, filters browser-internal headers, maps cookies and body
-
-See [`hurl-to-har-to-hurl-converter/README.md`](hurl-to-har-to-hurl-converter/README.md) for build and usage instructions.
+Diarization requires a HuggingFace token (`HF_TOKEN` env var) and accepted access on:
+- `huggingface.co/pyannote/speaker-diarization-3.1`
+- `huggingface.co/pyannote/segmentation-3.0`
+- `huggingface.co/pyannote/speaker-diarization-community-1`
 
 ### Google Cloud Media Generation Scripts
 
-`generate_video.py`, `generate_audio.py`, `generate_image.py`, and `generate_speech.py` use Google Cloud Vertex AI APIs. They require Google Cloud authentication and a quota project.
+| Script | Model | API |
+|---|---|---|
+| `generate_video.py` | Veo 3.1 (`veo-3.1-generate-001`) | Vertex AI |
+| `generate_audio.py` | Lyria 002 (`lyria-002`) | REST |
+| `generate_image.py` | Imagen 4.0 Ultra (`imagen-4.0-ultra-generate-001`) | google-genai SDK |
+| `generate_speech.py` | Chirp 3 HD | Cloud Text-to-Speech Long Audio Synthesis |
+
+**`generate_video.py`** — Generates videos with image-to-video continuation (extracts last frame via ffmpeg for chaining). Outputs to `video/` with `video-series-{theme}-{timestamp}.mp4` naming.
+
+**`generate_audio.py`** — Music generation with prompt, negative prompt, seed, and sample count parameters. Outputs to `audio/`.
+
+**`generate_image.py`** — Reads prompt from `~/my/src/loxal/lox/al/prompts/avatar.md`. Outputs to `image/`.
+
+**`generate_speech.py`** — Reads SSML from `~/my/src/loxal/lox/al/prompts/speech.ssml` (falls back to `speech.md`). Supports `--lang` flag for language/voice selection (de, en, ru). Extracts Dublin Core metadata from SSML and embeds it as ID3 tags in the output MP3. Uses GCS bucket for long audio staging, converts LINEAR16 WAV to MP3 via ffmpeg.
 
 #### Google Cloud Authentication
 
@@ -56,53 +62,29 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --role="roles/aiplatform.user"
 ```
 
-Replace `YOUR_PROJECT_ID` and `YOUR_EMAIL` with your actual values.
+### `hurl-to-har-to-hurl-converter/`
 
-#### Running
+Bidirectional converter between [HURL](https://hurl.dev) and [HAR](http://www.softwareishard.com/blog/har-12-spec/) formats. See [`hurl-to-har-to-hurl-converter/README.md`](hurl-to-har-to-hurl-converter/README.md).
+
+## Setup
+
+- Python 3.10+, [uv](https://docs.astral.sh/uv/), FFmpeg
+
+```sh
+brew install ffmpeg   # macOS
+```
+
+## Running
+
+All recipes are in the `justfile`:
 
 ```sh
 just generate-video
 just generate-audio
 just generate-image
-just generate-speech
+just generate-speech           # default: German
+just generate-speech en        # English
+just generate-speech ru        # Russian
+just transcribe
+just merge-videos
 ```
-
-## Setup
-
-### Prerequisites
-
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
-- FFmpeg (required for audio decoding)
-
-Install FFmpeg:
-
-```sh
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt install ffmpeg
-```
-
-### Installing dependencies
-
-Install the required packages with `uv`:
-
-```sh
-uv pip install openai-whisper tqdm
-```
-
-For optional speaker diarization support:
-
-```sh
-uv pip install pyannote.audio torch
-```
-
-### Running
-
-```sh
-python transcribe_audio_folder_to_markdown.py
-```
-
-The script will interactively prompt for the folder to process and an optional language hint.

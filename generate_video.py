@@ -8,7 +8,9 @@
 import glob
 import hashlib
 import os
+import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,11 +22,14 @@ VIDEO_DIR = Path("video")
 VIDEO_DIR.mkdir(exist_ok=True)
 
 client = genai.Client(
-    api_key=os.environ["GEMINI_API_KEY"],
+    vertexai=True,
+    project="instant-droplet-485818-i0",
+    location="us-central1",
 )
 
 prompt = """
-  Create a documentary about the migration to Titan and
+  Create a most lickable and popular documentary video for YouTube
+  about the migration to the Jupiter moon Titan and
   elaborate why it could be a better option than a migration to Mars.
 """
 
@@ -35,10 +40,19 @@ previous_videos = sorted(glob.glob(str(VIDEO_DIR / f"video-series-{theme}-*.mp4"
 if previous_videos:
     latest_video_path = previous_videos[-1]
     print(f"Continuing from: {latest_video_path}")
-    with open(latest_video_path, "rb") as f:
-        previous_bytes = f.read()
+    # Extract the last frame to use as image-to-video input
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        last_frame_path = tmp.name
+    subprocess.run(
+        ["ffmpeg", "-sseof", "-0.1", "-i", latest_video_path,
+         "-frames:v", "1", "-y", last_frame_path],
+        check=True, capture_output=True,
+    )
+    with open(last_frame_path, "rb") as f:
+        last_frame_bytes = f.read()
+    os.unlink(last_frame_path)
     source = types.GenerateVideosSource(
-        video=types.Video(video_bytes=previous_bytes, mime_type="video/mp4"),
+        image=types.Image(image_bytes=last_frame_bytes, mime_type="image/png"),
         prompt=prompt,
     )
 else:
@@ -49,15 +63,16 @@ config = types.GenerateVideosConfig(
     aspect_ratio="16:9",
     number_of_videos=1,
     durationSeconds=8,
-    personGeneration="allow_adult",
-    # generate_audio=True, # not available in veo-3.1-fast-generate-preview
-    resolution="720p",
-    # seed=0,
+    personGeneration="allow_all",
+    # personGeneration="allow_adult",
+    generate_audio=True, # not available in veo-3.1-fast-generate-preview
+    resolution="1080p",
+    # seed=42,
 )
 
 # Generate the video generation request
 operation = client.models.generate_videos(
-    model="veo-3.1-fast-generate-preview", source=source, config=config
+    model="veo-3.1-generate-001", source=source, config=config
 )
 
 # Waiting for the video(s) to be generated
@@ -82,13 +97,18 @@ for i, generated_video in enumerate(generated_videos):
     if not video:
         print(f"Video {i}: no video object")
         continue
-    # Download the video to populate video_bytes
-    client.files.download(file=video)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    filename = VIDEO_DIR / f"video-series-{theme}-{timestamp}.mp4"
     if video.video_bytes:
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        filename = VIDEO_DIR / f"video-series-{theme}-{timestamp}.mp4"
         with open(filename, "wb") as f:
             f.write(video.video_bytes)
         print(f"Saved {filename}")
+    elif video.uri:
+        # Vertex AI returns a GCS URI; download via gcloud
+        subprocess.run(
+            ["gcloud", "storage", "cp", video.uri, str(filename)],
+            check=True,
+        )
+        print(f"Saved {filename} (from {video.uri})")
     else:
-        print(f"Video {i}: no video bytes available (uri: {video.uri})")
+        print(f"Video {i}: no video bytes or URI available")

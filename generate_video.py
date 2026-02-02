@@ -6,18 +6,20 @@
 # ///
 
 import os
-import time
 import sys
+import time
+
 from google import genai
 from google.genai import types
-
 
 client = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"],
 )
 
 source = types.GenerateVideosSource(
-    prompt="""Create a beautiful, stunning, dramatic and breath-taking intro for a cyber world war with China and Russia winning over USA and EU. """,
+    prompt="""
+      Create a documentary about migration to Mars.
+    """,
 )
 
 config = types.GenerateVideosConfig(

@@ -5,28 +5,54 @@
 # ]
 # ///
 
+import glob
+import hashlib
 import os
 import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 
 from google import genai
 from google.genai import types
+
+VIDEO_DIR = Path("video")
+VIDEO_DIR.mkdir(exist_ok=True)
 
 client = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"],
 )
 
-source = types.GenerateVideosSource(
-    prompt="""
-      Create a documentary about migration to Mars.
-    """,
-)
+prompt = """
+  Create a documentary about the migration to Titan and
+  elaborate why it could be a better option than a migration to Mars.
+"""
+
+theme = hashlib.sha256(prompt.encode()).hexdigest()[:8]
+
+# Find the latest video in the video/ subfolder to continue from
+previous_videos = sorted(glob.glob(str(VIDEO_DIR / f"video-series-{theme}-*.mp4")))
+if previous_videos:
+    latest_video_path = previous_videos[-1]
+    print(f"Continuing from: {latest_video_path}")
+    with open(latest_video_path, "rb") as f:
+        previous_bytes = f.read()
+    source = types.GenerateVideosSource(
+        video=types.Video(video_bytes=previous_bytes, mime_type="video/mp4"),
+        prompt=prompt,
+    )
+else:
+    print("No previous video found, generating from prompt only.")
+    source = types.GenerateVideosSource(prompt=prompt)
 
 config = types.GenerateVideosConfig(
     aspect_ratio="16:9",
     number_of_videos=1,
-    duration_seconds=4,
-    person_generation="allow_all",
+    durationSeconds=8,
+    personGeneration="allow_adult",
+    # generate_audio=True, # not available in veo-3.1-fast-generate-preview
+    resolution="720p",
+    # seed=0,
 )
 
 # Generate the video generation request
@@ -59,7 +85,8 @@ for i, generated_video in enumerate(generated_videos):
     # Download the video to populate video_bytes
     client.files.download(file=video)
     if video.video_bytes:
-        filename = f"generated_video_{i}.mp4"
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        filename = VIDEO_DIR / f"video-series-{theme}-{timestamp}.mp4"
         with open(filename, "wb") as f:
             f.write(video.video_bytes)
         print(f"Saved {filename}")

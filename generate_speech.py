@@ -49,33 +49,37 @@ def markdown_to_plain_text(md: str) -> str:
     return text.strip()
 
 
-def extract_ssml_title(ssml: str) -> str | None:
-    """Extract dc:title from SSML metadata."""
-    try:
-        root = ET.fromstring(ssml)
-        # Search with and without namespace
-        for tag in ["dc:title", "{http://purl.org/dc/elements/1.1/}title"]:
-            elem = root.find(f".//{tag}")
-            if elem is not None and elem.text:
-                return elem.text.strip()
-        # Fallback: regex for dc:title
-        match = re.search(r"<dc:title>(.*?)</dc:title>", ssml)
+def extract_dc_metadata(ssml: str) -> dict[str, str]:
+    """Extract all Dublin Core metadata elements from SSML.
+
+    Supported DC elements: title, creator, subject, description,
+    publisher, contributor, date, type, format, identifier,
+    source, language, relation, coverage, rights.
+    """
+    dc_fields = [
+        "title", "creator", "subject", "description", "publisher",
+        "contributor", "date", "type", "format", "identifier",
+        "source", "language", "relation", "coverage", "rights",
+    ]
+    metadata = {}
+    # Regex approach — works regardless of XML parser namespace handling
+    for field in dc_fields:
+        match = re.search(rf"<dc:{field}>(.*?)</dc:{field}>", ssml, re.DOTALL)
         if match:
-            return match.group(1).strip()
-    except ET.ParseError:
-        pass
-    return None
+            metadata[field] = match.group(1).strip()
+    return metadata
 
 
 # Prefer SSML file if it exists, otherwise fall back to markdown
 file_prefix = "speech"
+dc_metadata = {}
 if SSML_FILE.exists() and SSML_FILE.read_text().strip():
     ssml_content = SSML_FILE.read_text().strip()
     synthesis_input = texttospeech.SynthesisInput(ssml=ssml_content)
     input_hash = ssml_content
-    title = extract_ssml_title(ssml_content)
-    if title:
-        file_prefix = re.sub(r"[^\w\s-]", "", title).strip().replace(" ", "-")
+    dc_metadata = extract_dc_metadata(ssml_content)
+    if dc_metadata.get("title"):
+        file_prefix = re.sub(r"[^\w\s-]", "", dc_metadata["title"]).strip().replace(" ", "-")
     print(f"Using SSML input: {SSML_FILE}")
 elif MD_FILE.exists() and MD_FILE.read_text().strip():
     prompt = markdown_to_plain_text(MD_FILE.read_text().strip())
@@ -138,10 +142,31 @@ subprocess.run(
     capture_output=True,
 )
 
-# Convert WAV to MP3
+# Convert WAV to MP3 with embedded metadata
 local_mp3 = local_wav.with_suffix(".mp3")
+ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(local_wav), "-codec:a", "libmp3lame", "-q:a", "0", "-ar", "48000"]
+
+# Map Dublin Core metadata to ID3 tags
+dc_to_id3 = {
+    "title": "title",
+    "creator": "artist",
+    "subject": "genre",
+    "description": "comment",
+    "publisher": "publisher",
+    "contributor": "album_artist",
+    "date": "date",
+    "language": "language",
+    "rights": "copyright",
+    "source": "url",
+}
+for dc_field, id3_tag in dc_to_id3.items():
+    value = dc_metadata.get(dc_field)
+    if value:
+        ffmpeg_cmd.extend(["-metadata", f"{id3_tag}={value}"])
+
+ffmpeg_cmd.append(str(local_mp3))
 subprocess.run(
-    ["ffmpeg", "-y", "-i", str(local_wav), "-codec:a", "libmp3lame", "-q:a", "0", "-ar", "48000", str(local_mp3)],
+    ffmpeg_cmd,
     check=True,
     capture_output=True,
 )

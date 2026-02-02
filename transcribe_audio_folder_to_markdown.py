@@ -3,6 +3,8 @@
 # dependencies = [
 #     "openai-whisper",
 #     "tqdm",
+#     "pyannote.audio",
+#     "torch",
 # ]
 # ///
 
@@ -108,12 +110,17 @@ def setup_diarization():
         print("Loading speaker diarization model...")
         device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
+        # PyTorch 2.6+ defaults weights_only=True which breaks pyannote checkpoints
+        _orig_load = torch.load
+        torch.load = lambda *a, **kw: _orig_load(*a, **{**kw, "weights_only": False})
+
         # Use 'token=' (new API) instead of deprecated 'use_auth_token='
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
             token=hf_token
         )
         pipeline.to(torch.device(device))
+        torch.load = _orig_load  # restore original
         print(f"✓ Speaker diarization ready (using {device})")
         return pipeline
 

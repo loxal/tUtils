@@ -23,13 +23,13 @@ source = types.GenerateVideosSource(
 config = types.GenerateVideosConfig(
     aspect_ratio="16:9",
     number_of_videos=1,
-    duration_seconds=8,
+    duration_seconds=4,
     person_generation="allow_all",
 )
 
 # Generate the video generation request
 operation = client.models.generate_videos(
-    model="veo-3.1-generate-preview", source=source, config=config
+    model="veo-3.1-fast-generate-preview", source=source, config=config
 )
 
 # Waiting for the video(s) to be generated
@@ -50,8 +50,16 @@ if not generated_videos:
 
 print(f"Generated {len(generated_videos)} video(s).")
 for i, generated_video in enumerate(generated_videos):
-    if generated_video.video and generated_video.video.video_bytes:
+    video = generated_video.video
+    if not video:
+        print(f"Video {i}: no video object")
+        continue
+    # Download the video to populate video_bytes
+    client.files.download(file=video)
+    if video.video_bytes:
         filename = f"generated_video_{i}.mp4"
         with open(filename, "wb") as f:
-            f.write(generated_video.video.video_bytes)
+            f.write(video.video_bytes)
         print(f"Saved {filename}")
+    else:
+        print(f"Video {i}: no video bytes available (uri: {video.uri})")

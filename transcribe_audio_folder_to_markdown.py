@@ -1,13 +1,20 @@
-#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "openai-whisper",
+#     "tqdm",
+# ]
+# ///
+
 """
-Audio-to-Markdown Transcription Script
-======================================
+Audio-to-SSML Transcription Script
+===================================
 Uses OpenAI Whisper large-v3 with optional speaker diarization.
 
 Features:
 - Auto-downloads model to ~/Downloads/whisper_models/
 - Recursively processes all audio files in a folder
-- Creates .md files alongside source audio files
+- Creates .ssml files alongside source audio files (compatible with TTS engines)
 - Speaker diarization (requires HuggingFace token for pyannote)
 - Progress display
 
@@ -27,6 +34,7 @@ import shutil
 import warnings
 from pathlib import Path
 from datetime import timedelta
+from xml.sax.saxutils import escape
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -169,6 +177,55 @@ def build_speaker_labels(speaker_segments: dict) -> dict:
     return labels
 
 
+def voices_for_language(lang_code: str) -> list[str]:
+    """Return up to 6 distinct Chirp 3 HD voices for a language."""
+    pools = {
+        "de": [
+            "de-DE-Chirp3-HD-Fenrir",
+            "de-DE-Chirp3-HD-Aoede",
+            "de-DE-Chirp3-HD-Orus",
+            "de-DE-Chirp3-HD-Puck",
+            "de-DE-Chirp3-HD-Charon",
+            "de-DE-Chirp3-HD-Kore",
+        ],
+        "en": [
+            "en-US-Chirp3-HD-Achird",
+            "en-US-Chirp3-HD-Aoede",
+            "en-US-Chirp3-HD-Fenrir",
+            "en-US-Chirp3-HD-Puck",
+            "en-US-Chirp3-HD-Charon",
+            "en-US-Chirp3-HD-Kore",
+        ],
+        "es": [
+            "es-ES-Chirp3-HD-Achird",
+            "es-ES-Chirp3-HD-Aoede",
+            "es-ES-Chirp3-HD-Fenrir",
+            "es-ES-Chirp3-HD-Puck",
+            "es-ES-Chirp3-HD-Charon",
+            "es-ES-Chirp3-HD-Kore",
+        ],
+        "fr": [
+            "fr-FR-Chirp3-HD-Achird",
+            "fr-FR-Chirp3-HD-Aoede",
+            "fr-FR-Chirp3-HD-Fenrir",
+            "fr-FR-Chirp3-HD-Puck",
+            "fr-FR-Chirp3-HD-Charon",
+            "fr-FR-Chirp3-HD-Kore",
+        ],
+        "ru": [
+            "ru-RU-Chirp3-HD-Achird",
+            "ru-RU-Chirp3-HD-Aoede",
+            "ru-RU-Chirp3-HD-Fenrir",
+            "ru-RU-Chirp3-HD-Puck",
+            "ru-RU-Chirp3-HD-Charon",
+            "ru-RU-Chirp3-HD-Kore",
+        ],
+    }
+    fallback = [f"{lang_code}-Chirp3-HD-{name}" for name in
+                ["Achird", "Aoede", "Fenrir", "Puck", "Charon", "Kore"]]
+    return pools.get(lang_code, fallback)
+
+
 def transcribe_audio(
     audio_path: str,
     model,
@@ -176,9 +233,10 @@ def transcribe_audio(
     language: str = None
 ) -> str:
     """
-    Transcribe audio file to markdown format.
+    Transcribe audio file to SSML format.
 
-    Returns markdown string with timestamps and optional speaker labels.
+    Returns an SSML string with <voice> tags for speakers and <break> for pauses,
+    compatible with Google Cloud Text-to-Speech and generate_speech.py.
     """
     # Get speaker segments if diarization is available
     speaker_segments = get_speaker_segments(audio_path, diarization_pipeline)
@@ -191,20 +249,33 @@ def transcribe_audio(
 
     result = model.transcribe(audio_path, **options)
 
-    # Build markdown content
-    md_lines = []
-    md_lines.append(f"# Transcript: {Path(audio_path).name}\n")
-    md_lines.append(f"**Language detected:** {result.get('language', 'unknown')}\n")
+    detected_lang = result.get("language", "en")
+    voice_pool = voices_for_language(detected_lang)
+    title = Path(audio_path).stem
 
-    if speaker_labels:
-        md_lines.append(f"**Speakers identified:** {len(speaker_labels)}\n")
-        for raw_id, label in speaker_labels.items():
-            md_lines.append(f"- **{label}** ({raw_id})")
-        md_lines.append("")
+    # Assign a distinct voice to each speaker (up to 6)
+    speaker_voice_map = {}
+    for i, label in enumerate(speaker_labels.values()):
+        speaker_voice_map[label] = voice_pool[i % len(voice_pool)]
 
-    md_lines.append("---\n")
+    # Build SSML
+    lines = []
+    lines.append('<?xml version="1.0" encoding="UTF-8"?>')
+    lines.append('<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"')
+    lines.append('       xmlns:dc="http://purl.org/dc/elements/1.1/"')
+    lines.append(f'       xml:lang="{detected_lang}">')
+    lines.append(f"  <dc:title>{escape(title)}</dc:title>")
+    lines.append("")
+
+    # Document the speaker-to-voice mapping
+    if speaker_voice_map:
+        for label, voice_name in speaker_voice_map.items():
+            lines.append(f"  <!-- {label}: {voice_name} -->")
+        lines.append("")
 
     current_speaker = None
+    voice_open = False
+    prev_end = 0.0
 
     for segment in result["segments"]:
         start = segment["start"]
@@ -214,19 +285,37 @@ def transcribe_audio(
         if not text:
             continue
 
-        timestamp = format_timestamp(start)
-
-        # Get speaker if diarization is available
+        # Determine speaker
         raw_speaker = find_speaker_for_segment(start, end, speaker_segments)
         speaker = speaker_labels.get(raw_speaker) if raw_speaker else None
 
-        if speaker and speaker != current_speaker:
+        # Insert a break for pauses > 0.5s between segments
+        gap = start - prev_end
+        if prev_end > 0 and gap > 0.5:
+            pause_ms = min(int(gap * 1000), 5000)  # cap at 5s
+            indent = "    " if voice_open else "  "
+            lines.append(f'{indent}<break time="{pause_ms}ms"/>')
+
+        # Switch voice on speaker change
+        if speaker_labels and speaker != current_speaker:
+            if voice_open:
+                lines.append("  </voice>")
+                lines.append("")
+            voice_name = speaker_voice_map.get(speaker, voice_pool[0])
+            lines.append(f'  <!-- {speaker} -->')
+            lines.append(f'  <voice name="{voice_name}">')
             current_speaker = speaker
-            md_lines.append(f"\n### {speaker}\n")
+            voice_open = True
 
-        md_lines.append(f"**[{timestamp}]** {text}\n")
+        indent = "    " if voice_open else "  "
+        lines.append(f"{indent}{escape(text)}")
+        prev_end = end
 
-    return "\n".join(md_lines)
+    if voice_open:
+        lines.append("  </voice>")
+
+    lines.append("</speak>")
+    return "\n".join(lines)
 
 def find_audio_files(folder: Path) -> list:
     """Recursively find all audio files in folder."""
@@ -265,27 +354,27 @@ def process_folder(
 
     for audio_path in tqdm(audio_files, desc="Transcribing", unit="file"):
         try:
-            # Create output path (same name, .md extension)
-            md_path = audio_path.with_suffix(".md")
+            # Create output path (same name, .ssml extension)
+            ssml_path = audio_path.with_suffix(".ssml")
 
             # Skip if already transcribed
-            if md_path.exists():
-                tqdm.write(f"  ⏭ Skipping (already exists): {md_path.name}")
+            if ssml_path.exists():
+                tqdm.write(f"  ⏭ Skipping (already exists): {ssml_path.name}")
                 continue
 
             tqdm.write(f"  → Processing: {audio_path.name}")
 
             # Transcribe
-            markdown = transcribe_audio(
+            ssml = transcribe_audio(
                 str(audio_path),
                 model,
                 diarization_pipeline,
                 language
             )
 
-            # Write markdown file
-            md_path.write_text(markdown, encoding="utf-8")
-            tqdm.write(f"  ✓ Created: {md_path.name}")
+            # Write SSML file
+            ssml_path.write_text(ssml, encoding="utf-8")
+            tqdm.write(f"  ✓ Created: {ssml_path.name}")
             successful += 1
 
         except Exception as e:
@@ -298,7 +387,7 @@ def process_folder(
 
 def main():
     print("="*60)
-    print("   AUDIO TO MARKDOWN TRANSCRIPTION")
+    print("   AUDIO TO SSML TRANSCRIPTION")
     print("   Using OpenAI Whisper large-v3")
     print("="*60)
 

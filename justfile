@@ -15,6 +15,9 @@ generate-image:
 generate-speech:
     uv run generate_speech.py
 
+transcribe:
+    uv run transcribe_audio_folder_to_markdown.py
+
 merge-videos:
     #!/usr/bin/env bash
     set -euo pipefail

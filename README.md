@@ -26,6 +26,47 @@ Bidirectional converter between [HURL](https://hurl.dev) and [HAR](http://www.so
 
 See [`hurl-to-har-to-hurl-converter/README.md`](hurl-to-har-to-hurl-converter/README.md) for build and usage instructions.
 
+### Google Cloud Media Generation Scripts
+
+`generate_video.py`, `generate_audio.py`, `generate_image.py`, and `generate_speech.py` use Google Cloud Vertex AI APIs. They require Google Cloud authentication and a quota project.
+
+#### Google Cloud Authentication
+
+1. Install the [gcloud CLI](https://cloud.google.com/sdk/docs/install).
+
+2. Authenticate and set the quota project:
+
+```sh
+gcloud auth application-default login
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+3. Enable the required APIs:
+
+```sh
+gcloud services enable aiplatform.googleapis.com --project=YOUR_PROJECT_ID
+gcloud services enable texttospeech.googleapis.com --project=YOUR_PROJECT_ID
+```
+
+4. Ensure your account has the `Vertex AI User` role:
+
+```sh
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="user:YOUR_EMAIL" \
+  --role="roles/aiplatform.user"
+```
+
+Replace `YOUR_PROJECT_ID` and `YOUR_EMAIL` with your actual values.
+
+#### Running
+
+```sh
+just generate-video
+just generate-audio
+just generate-image
+just generate-speech
+```
+
 ## Setup
 
 ### Prerequisites

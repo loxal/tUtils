@@ -18,6 +18,7 @@ Features:
 - Recursively processes all audio files in a folder
 - Creates .ssml files alongside source audio files (compatible with TTS engines)
 - Speaker diarization (requires HuggingFace token for pyannote)
+- **Parallel processing**: diarization and transcription run concurrently
 - Progress display
 
 Requirements:
@@ -38,6 +39,7 @@ import argparse
 from pathlib import Path
 from datetime import timedelta
 from xml.sax.saxutils import escape
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -133,8 +135,15 @@ def setup_diarization():
         print(f"\n⚠ Could not load diarization: {e}")
         return None
 
-def get_speaker_segments(audio_path: str, diarization_pipeline) -> dict:
-    """Get speaker segments from audio file."""
+
+def load_audio_for_whisper(audio_path: str):
+    """Load and preprocess audio for Whisper (resampled to 16kHz mono)."""
+    import whisper
+    return whisper.load_audio(audio_path)
+
+
+def run_diarization(audio_path: str, diarization_pipeline) -> dict:
+    """Run speaker diarization on audio file. Returns speaker segments dict."""
     if diarization_pipeline is None:
         return {}
 
@@ -142,11 +151,27 @@ def get_speaker_segments(audio_path: str, diarization_pipeline) -> dict:
         diarization = diarization_pipeline(audio_path)
         segments = {}
         for turn, _, speaker in diarization.itertracks(yield_label=True):
-            segments[(turn.start, turn.end)] = speaker
+            # Clamp start to not exceed end (pyannote edge case at file boundaries)
+            start = min(turn.start, turn.end)
+            end = turn.end
+            segments[(start, end)] = speaker
         return segments
     except Exception as e:
         print(f"  ⚠ Diarization failed: {e}")
         return {}
+
+
+def run_transcription(audio: "np.ndarray", model, language: str = None) -> dict:
+    """Run Whisper transcription on preloaded audio array."""
+    import whisper
+    
+    # Pad/trim to 30s chunks as Whisper expects
+    options = {"verbose": False}
+    if language:
+        options["language"] = language
+    
+    return model.transcribe(audio, **options)
+
 
 def find_speaker_for_segment(start: float, end: float, speaker_segments: dict) -> str:
     """Find the speaker for a given time segment."""
@@ -204,21 +229,36 @@ def transcribe_audio(
     language: str = None
 ) -> str:
     """
-    Transcribe audio file to SSML format.
+    Transcribe audio file to SSML format with parallel diarization.
 
     Returns an SSML string with <voice> tags for speakers and <break> for pauses,
     compatible with Google Cloud Text-to-Speech and generate_speech.py.
     """
-    # Get speaker segments if diarization is available
-    speaker_segments = get_speaker_segments(audio_path, diarization_pipeline)
+    # Load audio once for Whisper
+    audio = load_audio_for_whisper(audio_path)
+    
+    # Run diarization and transcription in parallel
+    speaker_segments = {}
+    result = None
+    
+    if diarization_pipeline is not None:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            # Submit both tasks
+            diarization_future = executor.submit(
+                run_diarization, audio_path, diarization_pipeline
+            )
+            transcription_future = executor.submit(
+                run_transcription, audio, model, language
+            )
+            
+            # Collect results
+            speaker_segments = diarization_future.result()
+            result = transcription_future.result()
+    else:
+        # No diarization, just transcribe
+        result = run_transcription(audio, model, language)
+    
     speaker_labels = build_speaker_labels(speaker_segments) if speaker_segments else {}
-
-    # Transcribe with Whisper
-    options = {"verbose": False}
-    if language:
-        options["language"] = language
-
-    result = model.transcribe(audio_path, **options)
 
     detected_lang = result.get("language", "en")
     voice_pool = voices_for_language(detected_lang)
@@ -318,6 +358,8 @@ def process_folder(
         print(f"  ... and {len(audio_files) - 10} more")
 
     print()
+    if diarization_pipeline is not None:
+        print("  ℹ Diarization + transcription will run in parallel\n")
 
     # Process each file with progress bar
     successful = 0

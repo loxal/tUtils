@@ -16,7 +16,19 @@ generate-speech lang='de':
     uv run generate_speech.py --lang {{lang}}
 
 transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/Drive/archive/Maxim/03-Beweismaterial/Audio":
-    uv run transcribe_audio_folder_to_markdown.py {{args}}
+    uv run transcribe_audio_folder.py {{args}}
+
+gooogle-auth:
+    gcloud auth login
+    gcloud auth application-default login
+    gcloud auth application-default set-quota-project instant-droplet-485818-i0
+
+    gcloud services enable aiplatform.googleapis.com --project=instant-droplet-485818-i0
+    gcloud services enable texttospeech.googleapis.com --project=instant-droplet-485818-i0
+
+    gcloud projects add-iam-policy-binding instant-droplet-485818-i0 \
+      --member="user:alexander.orlov@loxal.net" \
+      --role="roles/aiplatform.user"
 
 merge-videos:
     #!/usr/bin/env bash

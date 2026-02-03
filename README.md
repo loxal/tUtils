@@ -4,7 +4,7 @@ A collection of standalone scripts and utilities. All Python scripts use PEP 723
 
 ## Contents
 
-### `transcribe_audio_folder_to_markdown.py`
+### `transcribe_audio_folder.py`
 
 Batch audio-to-SSML transcription using OpenAI Whisper large-v3. Recursively processes audio files in a folder and creates `.ssml` files alongside each source, compatible with `generate_speech.py` for re-synthesis.
 
@@ -43,6 +43,7 @@ Diarization requires a HuggingFace token (`HF_TOKEN` env var) and accepted acces
 2. Authenticate and set the quota project:
 
 ```sh
+gcloud auth login
 gcloud auth application-default login
 gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 ```

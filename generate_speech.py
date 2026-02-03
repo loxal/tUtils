@@ -30,9 +30,9 @@ SSML_FILE = PROMPTS_DIR / "speech.ssml"
 MD_FILE = PROMPTS_DIR / "speech.md"
 
 LANG_VOICES = {
-    "de": {"voice": "de-DE-Chirp3-HD-Fenrir", "language_code": "de-DE"},
-    "en": {"voice": "en-US-Chirp3-HD-Fenrir", "language_code": "en-US"},
-    "ru": {"voice": "ru-RU-Chirp3-HD-Charon", "language_code": "ru-RU"},
+    "de": {"voice": "de-DE-Neural2-B", "language_code": "de-DE"},
+    "en": {"voice": "en-US-Neural2-D", "language_code": "en-US"},
+    "ru": {"voice": "ru-RU-Neural2-B", "language_code": "ru-RU"},
 }
 
 parser = argparse.ArgumentParser()
@@ -65,6 +65,27 @@ def markdown_to_plain_text(md: str) -> str:
     return text.strip()
 
 
+def sanitize_ssml_for_google(ssml: str) -> str:
+    """Strip W3C SSML features unsupported by Google Cloud TTS.
+
+    Removes: XML declaration, DOCTYPE, namespace attributes, <metadata> block,
+    <voice> wrapper. Keeps: <speak>, <p>, <s>, <break>, <emphasis>, <prosody>.
+    """
+    # Remove XML declaration and DOCTYPE
+    s = re.sub(r"<\?xml[^?]*\?>", "", ssml)
+    s = re.sub(r"<!DOCTYPE[^>]*>", "", s)
+    # Remove <metadata>...</metadata> block (with any attributes)
+    s = re.sub(r"<metadata[^>]*>.*?</metadata>", "", s, flags=re.DOTALL)
+    # Unwrap <voice ...>...</voice> (keep inner content)
+    s = re.sub(r"<voice[^>]*>", "", s)
+    s = re.sub(r"</voice>", "", s)
+    # Simplify <speak> tag — remove all attributes except xml:lang
+    lang_match = re.search(r'xml:lang="([^"]*)"', s)
+    lang_attr = f' xml:lang="{lang_match.group(1)}"' if lang_match else ""
+    s = re.sub(r"<speak[^>]*>", f"<speak{lang_attr}>", s)
+    return s.strip()
+
+
 def extract_dc_metadata(ssml: str) -> dict[str, str]:
     """Extract all Dublin Core metadata elements from SSML.
 
@@ -91,7 +112,8 @@ file_prefix = "speech"
 dc_metadata = {}
 if SSML_FILE.exists() and SSML_FILE.read_text().strip():
     ssml_content = SSML_FILE.read_text().strip()
-    synthesis_input = texttospeech.SynthesisInput(ssml=ssml_content)
+    google_ssml = sanitize_ssml_for_google(ssml_content)
+    synthesis_input = texttospeech.SynthesisInput(ssml=google_ssml)
     input_hash = ssml_content
     dc_metadata = extract_dc_metadata(ssml_content)
     if dc_metadata.get("title"):
@@ -115,7 +137,7 @@ timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 gcs_filename = f"{file_prefix}_{VOICE_NAME}_{theme}-{timestamp}.wav"
 output_gcs_uri = f"gs://{GCS_BUCKET}/speech/{gcs_filename}"
 
-client = texttospeech.TextToSpeechLongAudioSynthesizeClient()
+client = texttospeech.TextToSpeechLongAudioSynthesizeClient(transport="rest")
 
 voice = texttospeech.VoiceSelectionParams(
     name=VOICE_NAME,

@@ -17,6 +17,7 @@ generate-speech lang='de':
 
 transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/Drive/archive/Maxim/03-Beweismaterial/Audio":
     uv run transcribe_audio_folder.py {{args}}
+    # uv run --python 3.12 transcribe_audio_folder.py {{args}}
 
 gooogle-auth:
     gcloud auth login

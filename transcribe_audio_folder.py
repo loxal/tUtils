@@ -23,10 +23,9 @@ Features:
 
 Requirements:
     brew install ffmpeg          # macOS - REQUIRED for audio decoding
-    uv pip install openai-whisper tqdm
 
 For speaker diarization (optional):
-    uv pip install pyannote.audio torch
+    Requires HuggingFace token with pyannote access
 
 Supported formats: m4a, aac, mp3, wav, flac, ogg, wma, opus, webm, mp4
 """
@@ -72,10 +71,13 @@ def setup_model_cache():
     print(f"Model cache directory: {cache_dir}")
     return cache_dir
 
+
 def load_whisper_model(model_name: str = "large-v3"):
     """Load Whisper model with progress indication."""
     import whisper
 
+    setup_model_cache()
+    
     print(f"\nLoading Whisper {model_name} model...")
     print("(This will download ~3GB on first run)")
 
@@ -136,10 +138,47 @@ def setup_diarization():
         return None
 
 
-def load_audio_for_whisper(audio_path: str):
-    """Load and preprocess audio for Whisper (resampled to 16kHz mono)."""
-    import whisper
-    return whisper.load_audio(audio_path)
+def get_audio_duration(audio_path: str) -> float:
+    """Get audio duration in seconds using ffprobe."""
+    import subprocess
+    import json
+    
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", audio_path],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        info = json.loads(result.stdout)
+        return float(info["format"]["duration"])
+    return None
+
+
+def load_audio_with_ffmpeg(audio_path: str, target_sr: int = 16000):
+    """Load any audio format using ffmpeg, return torch tensor and sample rate."""
+    import subprocess
+    import numpy as np
+    import torch
+    
+    # Use ffmpeg to decode to raw PCM (mono, 16kHz, 16-bit signed)
+    cmd = [
+        "ffmpeg", "-i", audio_path,
+        "-f", "s16le",        # 16-bit signed little-endian PCM
+        "-acodec", "pcm_s16le",
+        "-ar", str(target_sr), # Resample to target
+        "-ac", "1",            # Mono
+        "-v", "quiet",
+        "-"                    # Output to stdout
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {result.stderr.decode()}")
+    
+    # Convert bytes to numpy array, then to torch tensor
+    audio_data = np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+    waveform = torch.from_numpy(audio_data).unsqueeze(0)  # Add channel dimension
+    
+    return waveform, target_sr
 
 
 def run_diarization(audio_path: str, diarization_pipeline) -> dict:
@@ -148,29 +187,58 @@ def run_diarization(audio_path: str, diarization_pipeline) -> dict:
         return {}
 
     try:
-        diarization = diarization_pipeline(audio_path)
+        # Get actual audio duration to prevent boundary errors
+        duration = get_audio_duration(audio_path)
+        
+        # Load audio with ffmpeg (handles all formats including m4a, aac)
+        waveform, sample_rate = load_audio_with_ffmpeg(audio_path, target_sr=16000)
+        
+        if duration:
+            # Trim 0.5s from end to avoid boundary errors
+            trim_samples = int(0.5 * sample_rate)
+            if waveform.shape[1] > trim_samples:
+                waveform = waveform[:, :-trim_samples]
+        
+        diarization = diarization_pipeline({"waveform": waveform, "sample_rate": sample_rate})
+        
         segments = {}
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
-            # Clamp start to not exceed end (pyannote edge case at file boundaries)
-            start = min(turn.start, turn.end)
-            end = turn.end
-            segments[(start, end)] = speaker
+        # Handle various pyannote API versions
+        if hasattr(diarization, 'itertracks'):
+            # Standard pyannote.core.Annotation API
+            for turn, _, speaker in diarization.itertracks(yield_label=True):
+                start = min(turn.start, turn.end)
+                segments[(start, turn.end)] = speaker
+        elif hasattr(diarization, 'speaker_diarization') and diarization.speaker_diarization is not None:
+            # DiarizeOutput dataclass (pyannote 3.x) - speaker_diarization is an Annotation
+            for turn, _, speaker in diarization.speaker_diarization.itertracks(yield_label=True):
+                start = min(turn.start, turn.end)
+                segments[(start, turn.end)] = speaker
+        elif hasattr(diarization, 'annotation'):
+            # DiarizeOutput wrapper - access the underlying annotation
+            for turn, _, speaker in diarization.annotation.itertracks(yield_label=True):
+                start = min(turn.start, turn.end)
+                segments[(start, turn.end)] = speaker
+        elif hasattr(diarization, 'segments'):
+            # Another possible API
+            for seg in diarization.segments:
+                start = min(seg.start, seg.end)
+                segments[(start, seg.end)] = seg.speaker
+        else:
+            # Debug: print what we got
+            print(f"  ⚠ Unknown diarization output type: {type(diarization)}, attrs: {dir(diarization)}")
         return segments
     except Exception as e:
         print(f"  ⚠ Diarization failed: {e}")
         return {}
 
 
-def run_transcription(audio: "np.ndarray", model, language: str = None) -> dict:
-    """Run Whisper transcription on preloaded audio array."""
-    import whisper
-    
-    # Pad/trim to 30s chunks as Whisper expects
+def run_transcription(audio_path: str, model, language: str = None) -> dict:
+    """Run Whisper transcription. Returns dict with 'segments' and 'language'."""
     options = {"verbose": False}
     if language:
         options["language"] = language
-    
-    return model.transcribe(audio, **options)
+
+    return model.transcribe(audio_path, **options)
 
 
 def find_speaker_for_segment(start: float, end: float, speaker_segments: dict) -> str:
@@ -234,9 +302,6 @@ def transcribe_audio(
     Returns an SSML string with <voice> tags for speakers and <break> for pauses,
     compatible with Google Cloud Text-to-Speech and generate_speech.py.
     """
-    # Load audio once for Whisper
-    audio = load_audio_for_whisper(audio_path)
-    
     # Run diarization and transcription in parallel
     speaker_segments = {}
     result = None
@@ -248,7 +313,7 @@ def transcribe_audio(
                 run_diarization, audio_path, diarization_pipeline
             )
             transcription_future = executor.submit(
-                run_transcription, audio, model, language
+                run_transcription, audio_path, model, language
             )
             
             # Collect results
@@ -256,7 +321,7 @@ def transcribe_audio(
             result = transcription_future.result()
     else:
         # No diarization, just transcribe
-        result = run_transcription(audio, model, language)
+        result = run_transcription(audio_path, model, language)
     
     speaker_labels = build_speaker_labels(speaker_segments) if speaker_segments else {}
 
@@ -385,8 +450,10 @@ def process_folder(
                 language
             )
 
-            # Write SSML file
-            ssml_path.write_text(ssml, encoding="utf-8")
+            # Write to temp file first, then atomic rename to prevent half-written files
+            temp_path = ssml_path.with_suffix(".ssml.tmp")
+            temp_path.write_text(ssml, encoding="utf-8")
+            temp_path.rename(ssml_path)  # Atomic on POSIX
             tqdm.write(f"  ✓ Created: {ssml_path.name}")
             successful += 1
 
@@ -416,9 +483,6 @@ def main():
 
     # Check ffmpeg first
     check_ffmpeg()
-
-    # Set up model cache
-    setup_model_cache()
 
     # Load Whisper model
     model = load_whisper_model("large-v3")

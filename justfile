@@ -12,9 +12,9 @@ generate-audio:
 generate-image:
     uv run generate_image.py
 
-# Alternative voice: de-DE-Chirp3-HD-Fenrir
+# Alternative voice: de-DE-Neural2-B (full SSML support)
 generate-speech lang='de' override-voice='false' strip-pitch='false' strip-emphasis='false':
-    uv run generate_speech.py --lang {{lang}} {{ if override-voice == "true" { "--override-voice de-DE-Neural2-B" } else { "" } }} {{ if strip-pitch == "true" { "--strip-pitch" } else { "" } }} {{ if strip-emphasis == "true" { "--strip-emphasis" } else { "" } }}
+    uv run generate_speech.py --lang {{lang}} {{ if override-voice == "true" { "--override-voice de-DE-Chirp3-HD-Fenrir" } else { "" } }} {{ if strip-pitch == "true" { "--strip-pitch" } else { "" } }} {{ if strip-emphasis == "true" { "--strip-emphasis" } else { "" } }}
 
 transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/Drive/archive/Maxim/03-Beweismaterial/Audio":
     uv run transcribe_audio_folder.py {{args}}

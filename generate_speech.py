@@ -30,9 +30,9 @@ SSML_FILE = PROMPTS_DIR / "speech.ssml"
 MD_FILE = PROMPTS_DIR / "speech.md"
 
 LANG_VOICES = {
-    "de": {"voice": "de-DE-Neural2-B", "language_code": "de-DE"},
-    "en": {"voice": "en-US-Neural2-D", "language_code": "en-US"},
-    "ru": {"voice": "ru-RU-Neural2-B", "language_code": "ru-RU"},
+    "de": {"voice": "de-DE-Chirp3-HD-Fenrir", "language_code": "de-DE"},
+    "en": {"voice": "en-US-Chirp3-HD-Fenrir", "language_code": "en-US"},
+    "ru": {"voice": "ru-RU-Chirp3-HD-Fenrir", "language_code": "ru-RU"},
 }
 
 parser = argparse.ArgumentParser()

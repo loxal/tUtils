@@ -12,8 +12,8 @@ generate-audio:
 generate-image:
     uv run generate_image.py
 
-generate-speech lang='de':
-    uv run generate_speech.py --lang {{lang}}
+generate-speech lang='de' override-voice='true' strip-pitch='true' strip-emphasis='true':
+    uv run generate_speech.py --lang {{lang}} {{ if override-voice == "true" { "--override-voice de-DE-Studio-B" } else { "" } }} {{ if strip-pitch == "true" { "--strip-pitch" } else { "" } }} {{ if strip-emphasis == "true" { "--strip-emphasis" } else { "" } }}
 
 transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/Drive/archive/Maxim/03-Beweismaterial/Audio":
     uv run transcribe_audio_folder.py {{args}}
@@ -27,9 +27,9 @@ gooogle-auth:
     gcloud services enable aiplatform.googleapis.com --project=instant-droplet-485818-i0
     gcloud services enable texttospeech.googleapis.com --project=instant-droplet-485818-i0
 
-    gcloud projects add-iam-policy-binding instant-droplet-485818-i0 \
-      --member="user:alexander.orlov@loxal.net" \
-      --role="roles/aiplatform.user"
+    # gcloud projects add-iam-policy-binding instant-droplet-485818-i0 \
+    #   --member="user:alexander.orlov@loxal.net" \
+    #   --role="roles/aiplatform.user"
 
 merge-videos:
     #!/usr/bin/env bash

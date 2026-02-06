@@ -38,11 +38,18 @@ LANG_VOICES = {
 parser = argparse.ArgumentParser()
 parser.add_argument("--lang", default="de", choices=LANG_VOICES.keys())
 parser.add_argument("--author", help="Author/Artist name for metadata")
+parser.add_argument("--override-voice", help="Override the default voice name for the selected language")
+parser.add_argument("--strip-pitch", action="store_true", help="Remove pitch attributes from prosody tags (required for Studio voices)")
+parser.add_argument("--strip-emphasis", action="store_true", help="Remove emphasis tags (required for Studio voices)")
 args = parser.parse_args()
 
 lang_cfg = LANG_VOICES[args.lang]
 VOICE_NAME = lang_cfg["voice"]
 LANGUAGE_CODE = lang_cfg["language_code"]
+
+if args.override_voice:
+    VOICE_NAME = args.override_voice
+    print(f"Voice overridden to: {VOICE_NAME}")
 
 
 def markdown_to_plain_text(md: str) -> str:
@@ -63,6 +70,16 @@ def markdown_to_plain_text(md: str) -> str:
     # Collapse multiple blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def strip_pitch_from_prosody(ssml: str) -> str:
+    """Remove pitch attributes from prosody tags (unsupported by Studio voices)."""
+    return re.sub(r'(<prosody[^>]*)\s+pitch="[^"]*"', r'\1', ssml)
+
+
+def strip_emphasis_tags(ssml: str) -> str:
+    """Remove emphasis tags but keep their content (unsupported by Studio voices)."""
+    return re.sub(r'<emphasis[^>]*>(.*?)</emphasis>', r'\1', ssml, flags=re.DOTALL)
 
 
 def sanitize_ssml_for_google(ssml: str) -> str:
@@ -113,6 +130,12 @@ dc_metadata = {}
 if SSML_FILE.exists() and SSML_FILE.read_text().strip():
     ssml_content = SSML_FILE.read_text().strip()
     google_ssml = sanitize_ssml_for_google(ssml_content)
+    if args.strip_pitch:
+        google_ssml = strip_pitch_from_prosody(google_ssml)
+        print("Pitch attributes stripped from prosody tags")
+    if args.strip_emphasis:
+        google_ssml = strip_emphasis_tags(google_ssml)
+        print("Emphasis tags stripped")
     synthesis_input = texttospeech.SynthesisInput(ssml=google_ssml)
     input_hash = ssml_content
     dc_metadata = extract_dc_metadata(ssml_content)

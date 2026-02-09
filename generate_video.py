@@ -103,7 +103,6 @@ else:
         person_generation="allow_all",
         generate_audio=True,
         resolution="720p",
-        output_gcs_uri=gcs_output_uri,
     )
     operation = client.models.generate_videos(
         model="veo-3.1-generate-001",
@@ -128,7 +127,7 @@ if not response:
 
 generated_videos = response.generated_videos
 if not generated_videos:
-    print("No videos were generated.")
+    print(f"No videos were generated. Response: {response}")
     sys.exit(1)
 
 print(f"Generated {len(generated_videos)} video(s).")

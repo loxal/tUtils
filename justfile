@@ -6,7 +6,7 @@ bootstrap-python-env:
 crate-bucket:
     gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
 
-generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/ambience.md' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
+generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
     uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --project {{project}} --gcs-bucket {{gcs-bucket}}
 
 generate-audio:

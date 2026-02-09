@@ -6,8 +6,8 @@ bootstrap-python-env:
 crate-bucket:
     gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
 
-generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
-    uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --project {{project}} --gcs-bucket {{gcs-bucket}}
+generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='720p' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
+    uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --resolution {{resolution}} --project {{project}} --gcs-bucket {{gcs-bucket}}
 
 generate-audio:
     uv run generate_audio.py
@@ -34,6 +34,24 @@ gooogle-auth project='instant-droplet-485818-i0':
     # gcloud projects add-iam-policy-binding {{project}} \
     #   --member="user:alexander.orlov@loxal.net" \
     #   --role="roles/aiplatform.user"
+
+loop-video loops='10':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    input=$(ls video/*.mp4 2>/dev/null | sort | head -1)
+    if [ -z "$input" ]; then
+        echo "No .mp4 files found in video/ folder."
+        exit 1
+    fi
+    echo "Looping $input {{loops}} times..."
+    filelist=$(mktemp)
+    for i in $(seq 1 {{loops}}); do
+        echo "file '$(pwd)/$input'" >> "$filelist"
+    done
+    output="video/loop-{{loops}}-$(basename "$input")"
+    ffmpeg -y -f concat -safe 0 -i "$filelist" -c copy "$output"
+    rm "$filelist"
+    echo "Saved $output"
 
 merge-videos:
     #!/usr/bin/env bash

@@ -27,6 +27,10 @@ parser.add_argument("--input", dest="input_mode", default="text",
                     help="Input mode: text (prompt only), jpg/png (image-to-video), or video (video extension)")
 parser.add_argument("--prompt-file", required=True,
                     help="Path to a text/markdown file containing the prompt")
+parser.add_argument("--resolution", default="720p", choices=["720p", "1080p"],
+                    help="Output video resolution (default: 720p)")
+parser.add_argument("--model", default="veo-3.1-generate-001",
+                    help="Video generation model (default: veo-3.1-generate-001)")
 args = parser.parse_args()
 
 VIDEO_DIR = Path("video")
@@ -56,11 +60,11 @@ if args.input_mode == "video":
         number_of_videos=1,
         person_generation="allow_all",
         generate_audio=True,
-        resolution="720p",
+        resolution=args.resolution,
         output_gcs_uri=gcs_output_uri,
     )
     operation = client.models.generate_videos(
-        model="veo-3.1-generate-001",
+        model=args.model,
         video=types.Video(
             video_bytes=Path(latest_video_path).read_bytes(),
             mime_type="video/mp4",
@@ -83,10 +87,10 @@ elif args.input_mode in ("jpg", "png"):
         duration_seconds=8,
         person_generation="allow_all",
         generate_audio=True,
-        resolution="720p",
+        resolution=args.resolution,
     )
     operation = client.models.generate_videos(
-        model="veo-3.1-generate-001",
+        model=args.model,
         image=types.Image(
             image_bytes=Path(latest_image_path).read_bytes(),
             mime_type=mime_type,
@@ -102,10 +106,10 @@ else:
         duration_seconds=8,
         person_generation="allow_all",
         generate_audio=True,
-        resolution="720p",
+        resolution=args.resolution,
     )
     operation = client.models.generate_videos(
-        model="veo-3.1-generate-001",
+        model=args.model,
         prompt=prompt,
         config=config,
     )

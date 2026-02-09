@@ -5,12 +5,11 @@
 # ]
 # ///
 
+import argparse
 import glob
 import hashlib
-import os
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,62 +17,99 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--project", default="instant-droplet-485818-i0")
+parser.add_argument("--gcs-bucket", default=None,
+                    help="GCS bucket for output staging (e.g. gs://my-bucket). "
+                         "Required by Vertex AI for large video output.")
+parser.add_argument("--input", dest="input_mode", default="text",
+                    choices=["text", "jpg", "png", "video"],
+                    help="Input mode: text (prompt only), jpg/png (image-to-video), or video (video extension)")
+parser.add_argument("--prompt-file", required=True,
+                    help="Path to a text/markdown file containing the prompt")
+args = parser.parse_args()
+
 VIDEO_DIR = Path("video")
 VIDEO_DIR.mkdir(exist_ok=True)
 
 client = genai.Client(
     vertexai=True,
-    project="instant-droplet-485818-i0",
+    project=args.project,
     location="us-central1",
 )
 
-prompt = """
-  Create a most lickable and popular documentary video for YouTube
-  about the migration to the Jupiter moon Titan and
-  elaborate why it could be a better option than a migration to Mars.
-"""
+prompt = Path(args.prompt_file).read_text().strip()
 
 theme = hashlib.sha256(prompt.encode()).hexdigest()[:8]
 
-# Find the latest video in the video/ subfolder to continue from
-previous_videos = sorted(glob.glob(str(VIDEO_DIR / f"video-series-{theme}-*.mp4")))
-if previous_videos:
+gcs_output_uri = f"{args.gcs_bucket}/video-staging/" if args.gcs_bucket else None
+
+if args.input_mode == "video":
+    previous_videos = sorted(glob.glob(str(VIDEO_DIR / f"video-series-{theme}-*.mp4")))
+    if not previous_videos:
+        print("No previous video found for extension. Run with --input text first.")
+        sys.exit(1)
     latest_video_path = previous_videos[-1]
-    print(f"Continuing from: {latest_video_path}")
-    # Extract the last frame to use as image-to-video input
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        last_frame_path = tmp.name
-    subprocess.run(
-        ["ffmpeg", "-sseof", "-0.1", "-i", latest_video_path,
-         "-frames:v", "1", "-y", last_frame_path],
-        check=True, capture_output=True,
+    print(f"Extending from video: {latest_video_path}")
+    continuation_prompt = f"Continue this video the best possible way for the initial prompt: {prompt.strip()}"
+    config = types.GenerateVideosConfig(
+        number_of_videos=1,
+        person_generation="allow_all",
+        generate_audio=True,
+        resolution="720p",
+        output_gcs_uri=gcs_output_uri,
     )
-    with open(last_frame_path, "rb") as f:
-        last_frame_bytes = f.read()
-    os.unlink(last_frame_path)
-    source = types.GenerateVideosSource(
-        image=types.Image(image_bytes=last_frame_bytes, mime_type="image/png"),
+    operation = client.models.generate_videos(
+        model="veo-3.1-generate-001",
+        video=types.Video(
+            video_bytes=Path(latest_video_path).read_bytes(),
+            mime_type="video/mp4",
+        ),
+        prompt=continuation_prompt,
+        config=config,
+    )
+elif args.input_mode in ("jpg", "png"):
+    ext = args.input_mode
+    mime_type = "image/jpeg" if ext == "jpg" else "image/png"
+    images = sorted(glob.glob(str(VIDEO_DIR / f"*.{ext}")))
+    if not images:
+        print(f"No .{ext} files found in video/ folder.")
+        sys.exit(1)
+    latest_image_path = images[-1]
+    print(f"Generating video from image: {latest_image_path}")
+    config = types.GenerateVideosConfig(
+        aspect_ratio="16:9",
+        number_of_videos=1,
+        duration_seconds=8,
+        person_generation="allow_all",
+        generate_audio=True,
+        resolution="720p",
+    )
+    operation = client.models.generate_videos(
+        model="veo-3.1-generate-001",
+        image=types.Image(
+            image_bytes=Path(latest_image_path).read_bytes(),
+            mime_type=mime_type,
+        ),
         prompt=prompt,
+        config=config,
     )
 else:
-    print("No previous video found, generating from prompt only.")
-    source = types.GenerateVideosSource(prompt=prompt)
-
-config = types.GenerateVideosConfig(
-    aspect_ratio="16:9",
-    number_of_videos=1,
-    durationSeconds=8,
-    personGeneration="allow_all",
-    # personGeneration="allow_adult",
-    generate_audio=True, # not available in veo-3.1-fast-generate-preview
-    resolution="1080p",
-    # seed=42,
-)
-
-# Generate the video generation request
-operation = client.models.generate_videos(
-    model="veo-3.1-generate-001", source=source, config=config
-)
+    print("Generating from text prompt only.")
+    config = types.GenerateVideosConfig(
+        aspect_ratio="16:9",
+        number_of_videos=1,
+        duration_seconds=8,
+        person_generation="allow_all",
+        generate_audio=True,
+        resolution="720p",
+        output_gcs_uri=gcs_output_uri,
+    )
+    operation = client.models.generate_videos(
+        model="veo-3.1-generate-001",
+        prompt=prompt,
+        config=config,
+    )
 
 # Waiting for the video(s) to be generated
 while not operation.done:
@@ -81,9 +117,13 @@ while not operation.done:
     time.sleep(10)
     operation = client.operations.get(operation)
 
+if operation.error:
+    print(f"Video generation failed: {operation.error}")
+    sys.exit(1)
+
 response = operation.result
 if not response:
-    print("Error occurred while generating video.")
+    print(f"Error occurred while generating video. Operation: {operation}")
     sys.exit(1)
 
 generated_videos = response.generated_videos

@@ -3,8 +3,11 @@ bootstrap-python-env:
     source .venv/bin/activate.fish
     # uv pip install google-genai
 
-generate-video:
-    uv run generate_video.py
+crate-bucket:
+    gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
+
+generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/ambience.md' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
+    uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --project {{project}} --gcs-bucket {{gcs-bucket}}
 
 generate-audio:
     uv run generate_audio.py
@@ -12,7 +15,7 @@ generate-audio:
 generate-image:
     uv run generate_image.py
 
-# Alternative voice: de-DE-Neural2-B (full SSML support)
+# Might depend on `gooogle-auth` recipe; Alternative voice: de-DE-Neural2-B (full SSML support)
 generate-speech lang='de' override-voice='false' strip-pitch='false' strip-emphasis='false':
     uv run generate_speech.py --lang {{lang}} {{ if override-voice == "true" { "--override-voice de-DE-Chirp3-HD-Fenrir" } else { "" } }} {{ if strip-pitch == "true" { "--strip-pitch" } else { "" } }} {{ if strip-emphasis == "true" { "--strip-emphasis" } else { "" } }}
 
@@ -20,15 +23,15 @@ transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio
     uv run transcribe_audio_folder.py {{args}}
     # uv run --python 3.12 transcribe_audio_folder.py {{args}}
 
-gooogle-auth:
+gooogle-auth project='instant-droplet-485818-i0':
     gcloud auth login
     gcloud auth application-default login
-    gcloud auth application-default set-quota-project instant-droplet-485818-i0
+    gcloud auth application-default set-quota-project {{project}}
 
-    gcloud services enable aiplatform.googleapis.com --project=instant-droplet-485818-i0
-    gcloud services enable texttospeech.googleapis.com --project=instant-droplet-485818-i0
+    gcloud services enable aiplatform.googleapis.com --project={{project}}
+    gcloud services enable texttospeech.googleapis.com --project={{project}}
 
-    # gcloud projects add-iam-policy-binding instant-droplet-485818-i0 \
+    # gcloud projects add-iam-policy-binding {{project}} \
     #   --member="user:alexander.orlov@loxal.net" \
     #   --role="roles/aiplatform.user"
 

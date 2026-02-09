@@ -6,8 +6,8 @@ bootstrap-python-env:
 crate-bucket:
     gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
 
-generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='720p' model='veo-3.1-generate-001' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
-    uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --resolution {{resolution}} --model {{model}} --project {{project}} --gcs-bucket {{gcs-bucket}}
+generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='720p' model='veo-3.1-generate-001' audio='true' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
+    uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --resolution {{resolution}} --model {{model}} {{ if audio == "false" { "--no-audio" } else { "" } }} --project {{project}} --gcs-bucket {{gcs-bucket}}
 
 generate-audio:
     uv run generate_audio.py

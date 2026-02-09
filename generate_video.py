@@ -31,6 +31,8 @@ parser.add_argument("--resolution", default="720p", choices=["720p", "1080p"],
                     help="Output video resolution (default: 720p)")
 parser.add_argument("--model", default="veo-3.1-generate-001",
                     help="Video generation model (default: veo-3.1-generate-001)")
+parser.add_argument("--no-audio", action="store_true",
+                    help="Disable audio generation")
 args = parser.parse_args()
 
 VIDEO_DIR = Path("video")
@@ -59,7 +61,7 @@ if args.input_mode == "video":
     config = types.GenerateVideosConfig(
         number_of_videos=1,
         person_generation="allow_all",
-        generate_audio=True,
+        generate_audio=not args.no_audio,
         resolution=args.resolution,
         output_gcs_uri=gcs_output_uri,
     )
@@ -86,7 +88,7 @@ elif args.input_mode in ("jpg", "png"):
         number_of_videos=1,
         duration_seconds=8,
         person_generation="allow_all",
-        generate_audio=True,
+        generate_audio=not args.no_audio,
         resolution=args.resolution,
     )
     operation = client.models.generate_videos(
@@ -105,7 +107,7 @@ else:
         number_of_videos=1,
         duration_seconds=8,
         person_generation="allow_all",
-        generate_audio=True,
+        generate_audio=not args.no_audio,
         resolution=args.resolution,
     )
     operation = client.models.generate_videos(

@@ -6,6 +6,7 @@
 # ]
 # ///
 
+import argparse
 import base64
 import hashlib
 import sys
@@ -16,17 +17,19 @@ import google.auth
 import google.auth.transport.requests
 import requests
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--prompt-file", required=True,
+                    help="Path to a text/markdown file containing the prompt")
+parser.add_argument("--project", default="instant-droplet-485818-i0")
+args = parser.parse_args()
+
 AUDIO_DIR = Path("audio")
 AUDIO_DIR.mkdir(exist_ok=True)
 
-PROJECT_ID = "instant-droplet-485818-i0"
 LOCATION = "us-central1"
 MODEL = "lyria-002"
 
-prompt = """
-  Write a psychedelic melodic track for a video of a cozy dystopian room,
-  up high in a skyscraper where a lonely cyberpunk is writing code to free himself.
-"""
+prompt = Path(args.prompt_file).read_text().strip()
 
 theme = hashlib.sha256(prompt.encode()).hexdigest()[:8]
 
@@ -37,7 +40,7 @@ creds.refresh(auth_req)
 
 endpoint = (
     f"https://{LOCATION}-aiplatform.googleapis.com/v1/"
-    f"projects/{PROJECT_ID}/locations/{LOCATION}/"
+    f"projects/{args.project}/locations/{LOCATION}/"
     f"publishers/google/models/{MODEL}:predict"
 )
 

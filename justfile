@@ -6,11 +6,11 @@ bootstrap-python-env:
 crate-bucket:
     gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
 
-generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='720p' model='veo-3.1-generate-001' audio='true' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
+generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='1080p' model='veo-3.1-generate-001' audio='false' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
     uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --resolution {{resolution}} --model {{model}} {{ if audio == "false" { "--no-audio" } else { "" } }} --project {{project}} --gcs-bucket {{gcs-bucket}}
 
-generate-audio:
-    uv run generate_audio.py
+generate-audio prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/music.md' project='instant-droplet-485818-i0':
+    uv run generate_audio.py --prompt-file {{prompt-file}} --project {{project}}
 
 generate-image:
     uv run generate_image.py
@@ -51,6 +51,28 @@ loop-video loops='10':
     output="video/loop-{{loops}}-$(basename "$input")"
     ffmpeg -y -f concat -safe 0 -i "$filelist" -c copy "$output"
     rm "$filelist"
+    echo "Saved $output"
+
+audio-overlay loop-audio='true':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    audio=$(ls audio/*.wav 2>/dev/null | sort | head -1)
+    if [ -z "$audio" ]; then
+        echo "No .wav files found in audio/ folder."
+        exit 1
+    fi
+    video=$(ls video/loop-*.mp4 2>/dev/null | sort | head -1)
+    if [ -z "$video" ]; then
+        echo "No loop-*.mp4 files found in video/ folder."
+        exit 1
+    fi
+    output="video/overlay-$(basename "$video")"
+    echo "Overlaying $audio onto $video..."
+    if [ "{{loop-audio}}" = "true" ]; then
+        ffmpeg -y -i "$video" -stream_loop -1 -i "$audio" -c:v copy -map 0:v:0 -map 1:a:0 -shortest "$output"
+    else
+        ffmpeg -y -i "$video" -i "$audio" -c:v copy -map 0:v:0 -map 1:a:0 -shortest "$output"
+    fi
     echo "Saved $output"
 
 merge-videos:

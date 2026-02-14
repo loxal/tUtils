@@ -6,11 +6,11 @@ bootstrap-python-env:
 crate-bucket:
     gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
 
-generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='1080p' model='veo-3.1-generate-001' audio='false' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
+generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='720p' model='veo-3.1-generate-001' audio='false' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':
     uv run generate_video.py --input {{input}} --prompt-file {{prompt-file}} --resolution {{resolution}} --model {{model}} {{ if audio == "false" { "--no-audio" } else { "" } }} --project {{project}} --gcs-bucket {{gcs-bucket}}
 
-generate-audio prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/music.md' project='instant-droplet-485818-i0':
-    uv run generate_audio.py --prompt-file {{prompt-file}} --project {{project}}
+generate-audio prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/music.md' sample-count='1' project='instant-droplet-485818-i0':
+    uv run generate_audio.py --prompt-file {{prompt-file}} --sample-count {{sample-count}} --project {{project}}
 
 generate-image:
     uv run generate_image.py
@@ -24,8 +24,8 @@ transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio
     # uv run --python 3.12 transcribe_audio_folder.py {{args}}
 
 gooogle-auth project='instant-droplet-485818-i0':
-    gcloud auth login
-    gcloud auth application-default login
+    gcloud auth login --quiet
+    gcloud auth application-default login --quiet
     gcloud auth application-default set-quota-project {{project}}
 
     gcloud services enable aiplatform.googleapis.com --project={{project}}

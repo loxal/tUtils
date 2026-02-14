@@ -21,6 +21,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--prompt-file", required=True,
                     help="Path to a text/markdown file containing the prompt")
 parser.add_argument("--project", default="instant-droplet-485818-i0")
+parser.add_argument("--sample-count", type=int, default=1,
+                    help="Number of audio clips to generate (default: 1)")
 args = parser.parse_args()
 
 AUDIO_DIR = Path("audio")
@@ -29,7 +31,17 @@ AUDIO_DIR.mkdir(exist_ok=True)
 LOCATION = "us-central1"
 MODEL = "lyria-002"
 
-prompt = Path(args.prompt_file).read_text().strip()
+raw = Path(args.prompt_file).read_text()
+metadata = {}
+if "---" in raw:
+    meta_section, prompt = raw.split("---", 1)
+    for line in meta_section.strip().splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            metadata[key.strip()] = value.strip()
+    prompt = prompt.strip()
+else:
+    prompt = raw.strip()
 
 theme = hashlib.sha256(prompt.encode()).hexdigest()[:8]
 
@@ -50,7 +62,7 @@ request_body = {
             "prompt": prompt.strip(),
             "negative_prompt": "vocals, singing, voice",
             # "seed": 42,  # for reproducible output; cannot use with sample_count
-            "sample_count": 4,  # number of clips; cannot use with seed
+            "sample_count": args.sample_count,  # number of clips; cannot use with seed
         }
     ],
     "parameters": {},

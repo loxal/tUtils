@@ -44,7 +44,17 @@ client = genai.Client(
     location="us-central1",
 )
 
-prompt = Path(args.prompt_file).read_text().strip()
+raw = Path(args.prompt_file).read_text()
+metadata = {}
+if "---" in raw:
+    meta_section, prompt = raw.split("---", 1)
+    for line in meta_section.strip().splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            metadata[key.strip()] = value.strip()
+    prompt = prompt.strip()
+else:
+    prompt = raw.strip()
 
 theme = hashlib.sha256(prompt.encode()).hexdigest()[:8]
 

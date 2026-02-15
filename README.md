@@ -63,10 +63,6 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --role="roles/aiplatform.user"
 ```
 
-### `hurl-to-har-to-hurl-converter/`
-
-Bidirectional converter between [HURL](https://hurl.dev) and [HAR](http://www.softwareishard.com/blog/har-12-spec/) formats. See [`hurl-to-har-to-hurl-converter/README.md`](hurl-to-har-to-hurl-converter/README.md).
-
 ## Setup
 
 - Python 3.10+, [uv](https://docs.astral.sh/uv/), FFmpeg

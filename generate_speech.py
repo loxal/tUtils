@@ -41,6 +41,7 @@ parser.add_argument("--author", help="Author/Artist name for metadata")
 parser.add_argument("--override-voice", help="Override the default voice name for the selected language")
 parser.add_argument("--strip-pitch", action="store_true", help="Remove pitch attributes from prosody tags (required for Studio voices)")
 parser.add_argument("--strip-emphasis", action="store_true", help="Remove emphasis tags (required for Studio voices)")
+parser.add_argument("--mp3", action="store_true", help="Output MP3 instead of AAC (default)")
 args = parser.parse_args()
 
 lang_cfg = LANG_VOICES[args.lang]
@@ -201,15 +202,19 @@ subprocess.run(
     capture_output=True,
 )
 
-# Convert WAV to MP3 with embedded metadata
-local_mp3 = local_wav.with_suffix(".mp3")
-ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(local_wav), "-codec:a", "libmp3lame", "-q:a", "0", "-ar", "48000"]
+# Convert WAV to output format with embedded metadata
+if args.mp3:
+    local_out = local_wav.with_suffix(".mp3")
+    ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(local_wav), "-codec:a", "libmp3lame", "-q:a", "0", "-ar", "48000"]
+else:
+    local_out = local_wav.with_suffix(".m4a")
+    ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(local_wav), "-codec:a", "aac", "-b:a", "256k", "-ar", "48000"]
 
 if args.author:
     dc_metadata["creator"] = args.author
 
-# Map Dublin Core metadata to ID3 tags
-dc_to_id3 = {
+# Map Dublin Core metadata to ffmpeg tags
+dc_to_tag = {
     "title": "title",
     "creator": "artist",
     "subject": "genre",
@@ -221,12 +226,12 @@ dc_to_id3 = {
     "rights": "copyright",
     "source": "url",
 }
-for dc_field, id3_tag in dc_to_id3.items():
+for dc_field, tag in dc_to_tag.items():
     value = dc_metadata.get(dc_field)
     if value:
-        ffmpeg_cmd.extend(["-metadata", f"{id3_tag}={value}"])
+        ffmpeg_cmd.extend(["-metadata", f"{tag}={value}"])
 
-ffmpeg_cmd.append(str(local_mp3))
+ffmpeg_cmd.append(str(local_out))
 subprocess.run(
     ffmpeg_cmd,
     check=True,
@@ -234,4 +239,4 @@ subprocess.run(
 )
 local_wav.unlink()
 
-print(f"Saved {local_mp3}")
+print(f"Saved {local_out}")

@@ -8,6 +8,7 @@
 import argparse
 import glob
 import hashlib
+import re
 import subprocess
 import sys
 import time
@@ -56,6 +57,15 @@ if "---" in raw:
 else:
     prompt = raw.strip()
 
+# Extract negative_prompt from prompt body if present
+negative_prompt = None
+neg_match = re.search(r'^negative_prompt:\s*(.+)$', prompt, re.MULTILINE)
+if neg_match:
+    negative_prompt = neg_match.group(1).strip()
+    prompt = prompt[:neg_match.start()] + prompt[neg_match.end():]
+    prompt = prompt.strip()
+    print(f"Negative prompt: {negative_prompt}")
+
 theme = hashlib.sha256(prompt.encode()).hexdigest()[:8]
 
 gcs_output_uri = f"{args.gcs_bucket}/video-staging/" if args.gcs_bucket else None
@@ -72,6 +82,7 @@ if args.input_mode == "video":
         number_of_videos=1,
         person_generation="allow_all",
         generate_audio=not args.no_audio,
+        negative_prompt=negative_prompt,
         resolution=args.resolution,
         output_gcs_uri=gcs_output_uri,
     )
@@ -99,6 +110,7 @@ elif args.input_mode in ("jpg", "png"):
         duration_seconds=8,
         person_generation="allow_all",
         generate_audio=not args.no_audio,
+        negative_prompt=negative_prompt,
         resolution=args.resolution,
     )
     operation = client.models.generate_videos(
@@ -118,6 +130,7 @@ else:
         duration_seconds=8,
         person_generation="allow_all",
         generate_audio=not args.no_audio,
+        negative_prompt=negative_prompt,
         resolution=args.resolution,
     )
     operation = client.models.generate_videos(

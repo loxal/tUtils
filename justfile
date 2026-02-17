@@ -35,7 +35,7 @@ gooogle-auth project='instant-droplet-485818-i0':
     #   --member="user:alexander.orlov@loxal.net" \
     #   --role="roles/aiplatform.user"
 
-loop-video loops='10':
+loop-video loops='225':
     #!/usr/bin/env bash
     set -euo pipefail
     input=$(ls video/*.mp4 2>/dev/null | sort | head -1)

@@ -3,7 +3,7 @@ bootstrap-python-env:
     source .venv/bin/activate.fish
     # uv pip install google-genai
 
-crate-bucket:
+create-bucket:
     gcloud storage buckets create gs://instant-droplet-485818-i0-video-staging --project=instant-droplet-485818-i0 --location=us-central1
 
 generate-video input='text' prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/video.md' resolution='720p' model='veo-3.1-generate-001' audio='false' project='instant-droplet-485818-i0' gcs-bucket='gs://instant-droplet-485818-i0-video-staging':

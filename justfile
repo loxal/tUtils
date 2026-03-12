@@ -19,7 +19,7 @@ generate-image:
 generate-speech lang='de' override-voice='false' strip-pitch='false' strip-emphasis='false' mp3='false':
     uv run generate_speech.py --lang {{lang}} {{ if override-voice == "true" { "--override-voice de-DE-Chirp3-HD-Fenrir" } else { "" } }} {{ if strip-pitch == "true" { "--strip-pitch" } else { "" } }} {{ if strip-emphasis == "true" { "--strip-emphasis" } else { "" } }} {{ if mp3 == "true" { "--mp3" } else { "" } }}
 
-transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/Drive/archive/Maxim/03-Beweismaterial/Audio":
+transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio-folder ~/i.drive/my/archive/Maxim/inbox":
     uv run transcribe_audio_folder.py {{args}}
     # uv run --python 3.12 transcribe_audio_folder.py {{args}}
 

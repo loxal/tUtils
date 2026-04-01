@@ -125,11 +125,24 @@ def extract_dc_metadata(ssml: str) -> dict[str, str]:
     return metadata
 
 
+# Resolve SSML input: fixed name first, then latest timestamped file
+def find_ssml_file():
+    """Return the SSML file to use: speech.ssml if it exists, else the latest speech-*.ssml."""
+    if SSML_FILE.exists() and SSML_FILE.read_text().strip():
+        return SSML_FILE
+    candidates = sorted(PROMPTS_DIR.glob("speech-*.ssml"), reverse=True)
+    for c in candidates:
+        if c.read_text().strip():
+            return c
+    return None
+
+resolved_ssml = find_ssml_file()
+
 # Prefer SSML file if it exists, otherwise fall back to markdown
 file_prefix = "speech"
 dc_metadata = {}
-if SSML_FILE.exists() and SSML_FILE.read_text().strip():
-    ssml_content = SSML_FILE.read_text().strip()
+if resolved_ssml:
+    ssml_content = resolved_ssml.read_text().strip()
     google_ssml = sanitize_ssml_for_google(ssml_content)
     if args.strip_pitch:
         google_ssml = strip_pitch_from_prosody(google_ssml)
@@ -142,7 +155,7 @@ if SSML_FILE.exists() and SSML_FILE.read_text().strip():
     dc_metadata = extract_dc_metadata(ssml_content)
     if dc_metadata.get("title"):
         file_prefix = re.sub(r"[^\w\s-]", "", dc_metadata["title"]).strip().replace(" ", "-")
-    print(f"Using SSML input: {SSML_FILE}")
+    print(f"Using SSML input: {resolved_ssml}")
 elif MD_FILE.exists() and MD_FILE.read_text().strip():
     prompt = markdown_to_plain_text(MD_FILE.read_text().strip())
     if not prompt:
@@ -152,7 +165,7 @@ elif MD_FILE.exists() and MD_FILE.read_text().strip():
     input_hash = prompt
     print(f"Using markdown input: {MD_FILE}")
 else:
-    print(f"No input found. Provide either {SSML_FILE} or {MD_FILE}")
+    print(f"No input found. Provide {SSML_FILE}, a timestamped speech-*.ssml in {PROMPTS_DIR}, or {MD_FILE}")
     sys.exit(1)
 
 theme = hashlib.sha256(input_hash.encode()).hexdigest()[:8]

@@ -15,7 +15,7 @@ generate-audio prompt-file='/Users/alex/my/src/loxal/lox/al/prompts/music.md' sa
 generate-image:
     uv run generate_image.py
 
-# Might depend on `gooogle-auth` recipe; Alternative voice: de-DE-Neural2-B (full SSML support)
+# Might depend on `google-auth` recipe; Alternative voice: de-DE-Neural2-B (full SSML support)
 generate-speech lang='de' override-voice='false' strip-pitch='false' strip-emphasis='false' mp3='false':
     uv run generate_speech.py --lang {{lang}} {{ if override-voice == "true" { "--override-voice de-DE-Chirp3-HD-Fenrir" } else { "" } }} {{ if strip-pitch == "true" { "--strip-pitch" } else { "" } }} {{ if strip-emphasis == "true" { "--strip-emphasis" } else { "" } }} {{ if mp3 == "true" { "--mp3" } else { "" } }}
 
@@ -23,7 +23,7 @@ transcribe *args="--lang de --hugging-face-api-key $HUGGING_FACE_API_KEY --audio
     uv run transcribe_audio_folder.py {{args}}
     # uv run --python 3.12 transcribe_audio_folder.py {{args}}
 
-gooogle-auth project='instant-droplet-485818-i0':
+google-auth project='instant-droplet-485818-i0':
     gcloud auth login --quiet
     gcloud auth application-default login --quiet
     gcloud auth application-default set-quota-project {{project}}
